@@ -5,6 +5,11 @@
 **  Copyright (c) 2015 Cierra Shawe. All rights reserved.
 *********************************************************/
 
+/* Defines */
+#define _POSIX_C_SOURCE 200809L
+#define _BSD_SOURCE
+#define BSIZE 128 // Default buffer size
+
 /* Standard libraries */
 #include <sys/types.h>
 #include <stdio.h>
@@ -25,14 +30,12 @@
 /* errno, and error constants */
 #include <errno.h>
 
-/* Defines */
-#define _POSIX_C_SOURCE 200809L
-#define _BSD_SOURCE
-#define BSIZE 128 // Default buffer size
-
-
+void print_usage();
 
 int main(int argc, const char * argv[]) {
+
+    if (argc == 1)
+        print_usage();
 
 
     /* -q quickly append named files to archive */
@@ -46,7 +49,30 @@ int main(int argc, const char * argv[]) {
     return 0;
 }
 
+void print_usage(){
 
+    printf("usage:  -q: quickly append named files to archive\n"
+           "            myar -q archive file ...\n"
+
+           "        -x: extract named files\n"
+           "            myar -x archive [file ...]\n"
+
+           "        -t: print a concise table of contents of the archive\n"
+           "        -v: iff specified with -t, print a verbose table of contents of the archive\n"
+           "            myar -t [-v] archive [file ...]\n"
+
+           "        -d: delete named files from the archive\n"
+           "            myar -d archive file ...\n"
+
+           "        -A: quickly append all “regular” files in the current directory\n"
+           "            myar -A archive file ...\n"
+
+           //"        Extra credit: \n"
+           //"        -w for a given timeout, add all modified files to the archive.\n"
+           //"            myar -w archive [file ...]\n"
+           );
+
+}
 
 /* ~~~~~~ Notes ~~~~~~ */
 
