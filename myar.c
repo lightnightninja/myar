@@ -30,48 +30,138 @@
 /* errno, and error constants */
 #include <errno.h>
 
-void print_usage();
+/* function declarations */
+void print_usage(); //prints out how to use program
+void q(); // handles -q
+void x(); // handles -x
+void t(); // handles -t
+void v(); // handles -v
+void d(); // handles -d
+void A(); // handles -A
+//void w(); //EXTRA CREDIT
 
-int main(int argc, const char * argv[]) {
 
-    if (argc == 1)
+int main(int argc, const char *argv[]) {
+
+
+    char option = argv[1][1];
+
+    /* No arguments passed */
+    if (argc == 1 || argc == 2)
         print_usage();
 
+    /* As long as there are at least two arguments */
+    else if (argc > 2 && argv[1][0] == '-') {
 
-    /* -q quickly append named files to archive */
-    /* -x extract named files */
-    /* -t print a concise table of contents of the archive */
-    /* -v iff specified with -t, print a verbose table of contents of the archive */
-    /* -d delete named files from the archive */
-    /* -A quickly append all “regular” files in the current directory (except the archive itself) */
+        /* Controls what happens when the flags are recieved*/
+        switch (option) {
+            case 'q':
+                q();
+                break;
+
+            case 'x':
+                x();
+                break;
+
+            case 't':
+                t();
+                break;
+
+            case 'd':
+                d();
+                break;
+
+            case 'A':
+                A();
+                break;
+
+            default:
+                print_usage();
+                break;
+        }
+
+    }
+
     /* -w Extra credit: for a given timeout, add all modified files to the archive. (except the archive itself) */
 
     return 0;
 }
 
+
+
+/* -q quickly append named files to archive */
+void q(){
+
+    printf("I recieved a q!\n");
+
+}
+
+
+/* -x extract named files */
+void x(){
+
+    printf("I recieved a x!\n");
+
+}
+
+
+/* -t print a concise table of contents of the archive */
+void t(){
+
+    printf("I recieved a t!\n");
+
+}
+
+
+/* -v iff specified with -t, print a verbose table of contents of the archive */
+void v(){
+
+    printf("I recieved a v!\n");
+
+}
+
+
+/* -d delete named files from the archive */
+void d(){
+
+    printf("I recieved a d!\n");
+
+}
+
+
+/* -A quickly append all “regular” files in the current directory (except the archive itself) */
+void A(){
+
+    printf("I recieved an A!\n");
+
+}
+
+
+/* prints out the usage of myar */
 void print_usage(){
 
-    printf("usage:  -q: quickly append named files to archive\n"
-           "            myar -q archive file ...\n"
+    printf("usage:\t"
+           "-q: quickly append named files to archive\n"
+           "\t\t\tmyar -q archive file ...\n"
 
-           "        -x: extract named files\n"
-           "            myar -x archive [file ...]\n"
+           "\t\t-x: extract named files\n"
+           "\t\t\tmyar -x archive [file ...]\n"
 
-           "        -t: print a concise table of contents of the archive\n"
-           "        -v: iff specified with -t, print a verbose table of contents of the archive\n"
-           "            myar -t [-v] archive [file ...]\n"
+           "\t\t-t: print a concise table of contents of the archive\n"
+           "\t\t-v: iff specified with -t, print a verbose table of contents of the archive\n"
+           "\t\t\tmyar -t [-v] archive [file ...]\n"
 
-           "        -d: delete named files from the archive\n"
-           "            myar -d archive file ...\n"
+           "\t\t-d: delete named files from the archive\n"
+           "\t\t\tmyar -d archive file ...\n"
 
-           "        -A: quickly append all “regular” files in the current directory\n"
-           "            myar -A archive file ...\n"
+           "\t\t-A: quickly append all “regular” files in the current directory\n"
+           "\t\t\tmyar -A archive file ...\n"
 
            //"        Extra credit: \n"
            //"        -w for a given timeout, add all modified files to the archive.\n"
            //"            myar -w archive [file ...]\n"
            );
-
+    
 }
 
 /* ~~~~~~ Notes ~~~~~~ */
