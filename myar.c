@@ -16,87 +16,87 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <stdbool.h>
 #include <unistd.h>
 #include <signal.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
+/* 
+ * Information on how to use this found at:
+ * http://www.mit.edu/afs.new/athena/system/rs_aix32/os/usr/include/ar.h 
+ */
 #include <ar.h>
 
 /* function declarations */
 void print_usage(); //prints out how to use program
-void q(); // handles -q
-void x(); // handles -x
-int isAr(int, char *const *); // handles -t
-void t();
-void v(); // handles -v
-void d(); // handles -d
-void A(); // handles -A
+void quick_append(); // handles -q
+void extract(); // handles -x
+void print_table(int);
+void delete(); // handles -d
+void append_all(); // handles -A
 //void w(); //EXTRA CREDIT
 
-void open_file(){
+int  _verbose(const char **); // handles -v
+int _check_input(int, const char **, int);
+void _append();
+void _create_ar();
+int _is_file_path();
 
 
+int main(int argc, const char *argv[]) {
 
-}
+    int     current = argv[1][1];
+    int     v = 0;
+    int     arch_name_pos = 2;
 
-void append_file(){}
+    char    *arch;
+    //int     arch_fd;
 
-
-
-/* this is used to give a default name in case of no archive name being specified */
-void createAr(){}
-
-
-
-int main(int argc, char *const argv[]) {
-
-    int current = argv[1][1];
-
-    for (int i = 0; i < argc; i++) {
-        printf("argv[%i]: %s\n", i, argv[i]);
+    /* ensuring correct input */
+    if (argv[1][1] == 't') {
+        v = _verbose(argv);
+        if (v == 1)
+            arch_name_pos++;
+        if (v == 0)
+            v = 1;
     }
-    /* No arguments passed */
-    if (argc == 1 || argc == 2)
-        print_usage();
 
-    /* As long as there are at least two arguments */
-    else if (argc > 2 && argv[1][1]) {
-
-        if(isAr(argc, argv) == 1)
-            printf("Using archive: %s\n", argv[2]);
-        else
-            printf("Invalid archive.\n");
-
-        /* Controls what happens when the flags are recieved*/
-        switch (current) {
-            case 'q':
-                q();
-                break;
-
-            case 'x':
-                x();
-                break;
-
-            case 't':
-                t(argc, argv);
-                break;
-
-            case 'd':
-                d();
-                break;
-
-            case 'A':
-                A();
-                break;
-
-            default:
-                print_usage();
-                break;
-        }
-
+    if(_check_input(argc, argv, arch_name_pos) == 1){
+        printf("Using archive: %s\n", argv[arch_name_pos]);
+        arch = (char*)argv[arch_name_pos];
     }
+
+    else
+        printf("Invalid archive.\n");
+
+    /* Controls what happens when the flags are recieved*/
+    switch (current) {
+        case 'q':
+            quick_append();
+            break;
+
+        case 'x':
+            extract();
+            break;
+
+        case 't':
+            print_table(v);
+            break;
+
+        case 'd':
+            delete();
+            break;
+
+        case 'A':
+            append_all();
+            break;
+
+        default:
+            print_usage();
+            break;
+    }
+
+
 
     /* -w Extra credit: for a given timeout, add all modified files to the archive. (except the archive itself) */
 
@@ -106,7 +106,7 @@ int main(int argc, char *const argv[]) {
 
 
 /* -q quickly append named files to archive */
-void q(){
+void quick_append(){
 
     printf("I recieved a q!\n");
 
@@ -114,46 +114,41 @@ void q(){
 
 
 /* -x extract named files */
-void x(){
+void extract(){
 
     printf("I recieved a x!\n");
 
 }
 
-int isAr(int argc, char *const argv[]){
-
-    for (int i = 0; i < sizeof(argv[2])/sizeof(char); i++)
-        if(argv[2][i] == '.')
-            if (argv[2][i+1] == 'a')
-                return 1;
-
-    print_usage();
-    return 0;
-
-}
 
 /* -t print a concise table of contents of the archive */
-void t(){
+void print_table(int verbose){
 
     printf("I recieved a t!\n");
 
 }
 
-/* -l option is given, the following information is displayed for each
- file: file mode, number of links, owner name, group name, number of bytes
- in the file, abbreviated month, day-of-month file was last modified, hour
- file last modified, minute file last modified, and the pathname. */
-/* -v iff specified with -t, print a verbose table of contents of the archive */
-void v(){
 
-    printf("I recieved a v!\n");
+/* returns whether or not the table is going to be printed in verbose mode */
+int verbose(const char **argv){
+
+    if (argv[1][1] == 't') {
+
+        if (argv[1][2] == 'v')
+            return 0;
+
+        if (argv[2][0] == '-')
+            if (argv[2][1] == 'v')
+                return 1;
+    }
+
+    return -1;
 
 }
 
 
 /* -d delete named files from the archive */
-void d(){
-
+void delete(){
 
     printf("I recieved a d!\n");
 
@@ -161,7 +156,7 @@ void d(){
 
 
 /* -A quickly append all “regular” files in the current directory (except the archive itself) */
-void A(){
+void append_all(){
 
     printf("I recieved an A!\n");
 
@@ -171,7 +166,8 @@ void A(){
 void print_usage(){
 
     printf("usage: ./myar [-qxtvdA] <archivename>.a <files> ... \n\t\t"
-           "-q: quickly append named files to archive\n\t"
+
+           "-q: quickly append named files to archive\n\t\t"
            "-x: extract named files\n\t\t"
            "-t: print a concise table of contents of the archive\n\t\t"
            "-v: iff specified with -t, print a verbose table of contents of the archive\n\t\t"
@@ -183,6 +179,50 @@ void print_usage(){
            //"            myar -w archive [file ...]\n"
            );
     
+}
+
+
+int _check_input(int argc, const char *argv[], int arch_name_pos){
+
+    /* No arguments passed */
+    if (argc == 1 || argc == 2)
+        print_usage();
+
+    /* checks to make sure that the archive has "valid" extention */
+    for (int i = 0; i < sizeof(argv[arch_name_pos])/sizeof(char); i++){
+        if(argv[arch_name_pos][i] == '.'){
+            if (argv[arch_name_pos][i+1] == 'a' && sizeof(argv[arch_name_pos]) <= 15)
+                return 1;
+            else if(sizeof(argv[arch_name_pos]) > 15){
+                printf("File name must be less than 15 charachters."); //this is simply to make things easier for later.
+                return 0;
+            }
+        }
+    }
+
+    print_usage();
+    return 0;
+
+}
+
+void _append(){}
+
+
+int _is_ar(){
+
+    return 1;
+}
+
+int _is_file_path(){
+
+
+    return 0;
+}
+/* this is used to give a default name in case of no archive name being specified? */
+void _create_ar(){
+
+
+
 }
 
 
