@@ -29,7 +29,7 @@
 
 /* function declarations */
 void    print_usage(); //prints out how to use program
-void    quick_append(); // handles -q
+int     append(char *, int, int); // handles -q
 void    extract(); // handles -x
 void    print_table(int);
 void    delete(); // handles -d
@@ -39,7 +39,6 @@ int     is_ar(int, char *, char);
 
 int     _verbose(const char **); // handles -v
 int     _input(int, const char **, int);
-void    _append();
 int     _create_ar(char *, int);
 int     _is_file_path();
 
@@ -50,9 +49,11 @@ int main(int argc, const char *argv[]) {
     int     file_count = 0;
     int     v = 0;
     int     arch_name_pos = 2;
+    int     file_pos;
 
     char    *arch = NULL;
     int     arch_fd;
+    int     file_fd;
 
     /* ensuring correct input, and that archive recieves .a extention */
     if (argv[1][1] == 't') {
@@ -83,7 +84,19 @@ int main(int argc, const char *argv[]) {
     /* Controls what happens when the flags are recieved*/
     switch (choice) {
         case 'q':
-            quick_append();
+            if (file_count != 0) {
+                for (int i = 0; i < file_count; i++, file_pos++) {
+                    if ((file_fd = open(argv[file_pos], O_RDONLY)) != -1) {
+                        if (append(arch, arch_fd, file_fd) == -1)
+                            exit(EXIT_FAILURE);
+                        close(file_fd);
+                    }
+                    else{
+                        fprintf(stderr, "Unable to append %s.\n", argv[file_pos]);
+                        exit(EXIT_FAILURE);
+                    }
+                }
+            }
             break;
 
         case 'x':
@@ -119,10 +132,49 @@ int main(int argc, const char *argv[]) {
 }
 
 
-/* -q quickly append named files to archive */
-void quick_append(){
 
-    printf("I recieved a q!\n");
+struct ar_hdr *_create_header(int file_fd, char *file_name){
+
+    struct ar_hdr *header = malloc(sizeof(struct ar_hdr));
+    struct stat stats;
+
+    fstat(file_fd, &stats);
+
+    snprintf(header->ar_name, sizeof(header->ar_name), "%s ", file_name);
+    snprintf(header->ar_date, sizeof(header->ar_date), "%llu",
+             (long long unsigned int) stats.st_mtime);
+    snprintf(header->ar_uid, sizeof(header->ar_uid), "%llu",
+             (long long unsigned int) stats.st_uid);
+    snprintf(header->ar_gid, sizeof(header->ar_gid), "%llu",
+             (long long unsigned int) stats.st_gid);
+    snprintf(header->ar_mode, sizeof(header->ar_mode), "%llo",
+             (long long unsigned int) (stats.st_mode));
+    snprintf(header->ar_size, sizeof(header->ar_size), "%llu",
+             (long long unsigned int) stats.st_size);
+
+    return header;
+}
+
+/* -q quickly append named files to archive */
+int append(char *file_name, int arch_fd, int file_fd){
+
+    struct ar_hdr *header = _create_header(file_fd, file_name);
+    char buffer[BSIZE];
+    size_t bytes_read;
+
+    /* Ensure we are starting on an even boundry, 4 sounded nice, since it's a typical word on 32bit systems */
+    int evenboundry;
+    evenboundry = lseek(arch_fd, 0, SEEK_END) % 4;
+    write(arch_fd, "\n", evenboundry-1);
+
+    memcpy(header->ar_fmag, ARFMAG, sizeof(header->ar_fmag)); //places the header in the file.
+
+    while ((bytes_read = read(file_fd, buffer, BSIZE)) > 0) {
+        if (write(arch_fd, buffer, bytes_read) != bytes_read)
+            return 1;
+    }
+
+    return 1;
 
 }
 
@@ -259,11 +311,6 @@ int _create_ar(char *file_name, int fd){
     printf("The FD is: %i\n", fd);//debug
 
     return fd;
-
-}
-
-void _append(){
-
 
 }
 
