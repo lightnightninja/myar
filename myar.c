@@ -9,6 +9,7 @@
 #define _POSIX_C_SOURCE 200809L
 #define _BSD_SOURCE
 #define BSIZE 128 // Default buffer size
+#define EMPTYSPACE 1024
 #define endl printf("\n")
 
 #include <sys/types.h>
@@ -81,6 +82,9 @@ int main(int argc, const char *argv[]) {
         exit(EXIT_FAILURE);
     }
     printf("testing if I get here\n");
+
+    file_pos = arch_name_pos + 1;
+
     /* Controls what happens when the flags are recieved*/
     switch (choice) {
         case 'q':
@@ -132,46 +136,53 @@ int main(int argc, const char *argv[]) {
 }
 
 
-
 struct ar_hdr *_create_header(int file_fd, char *file_name){
 
     struct ar_hdr *header = malloc(sizeof(struct ar_hdr));
     struct stat stats;
 
-    fstat(file_fd, &stats);
+    lstat(file_name, &stats);
 
-    snprintf(header->ar_name, sizeof(header->ar_name), "%s ", file_name);
-    snprintf(header->ar_date, sizeof(header->ar_date), "%llu",
-             (long long unsigned int) stats.st_mtime);
-    snprintf(header->ar_uid, sizeof(header->ar_uid), "%llu",
-             (long long unsigned int) stats.st_uid);
-    snprintf(header->ar_gid, sizeof(header->ar_gid), "%llu",
-             (long long unsigned int) stats.st_gid);
-    snprintf(header->ar_mode, sizeof(header->ar_mode), "%llo",
-             (long long unsigned int) (stats.st_mode));
-    snprintf(header->ar_size, sizeof(header->ar_size), "%llu",
-             (long long unsigned int) stats.st_size);
+    snprintf(header->ar_name, sizeof(header->ar_name), "%-16s",  file_name);
+    snprintf(header->ar_date, sizeof(header->ar_date), "%-12ld", (long)stats.st_mtime);
+    snprintf(header->ar_uid,  sizeof(header->ar_uid),  "%-6ld",  (long)stats.st_uid);
+    snprintf(header->ar_gid,  sizeof(header->ar_gid),  "%-6ld",  (long)stats.st_gid);
+    snprintf(header->ar_mode, sizeof(header->ar_mode), "%-8o",   stats.st_mode);
+    snprintf(header->ar_size, sizeof(header->ar_size), "%-10lld",(long long)stats.st_size);
+    snprintf(header->ar_fmag, sizeof(header->ar_fmag), "%c%c",   0x60, 0xa);
 
+    printf("Buffer written\n");
     return header;
 }
 
 /* -q quickly append named files to archive */
 int append(char *file_name, int arch_fd, int file_fd){
 
-    struct ar_hdr *header = _create_header(file_fd, file_name);
-    char buffer[BSIZE];
+    struct ar_hdr *buffer = malloc(sizeof(struct ar_hdr));
+    buffer = _create_header(file_fd, file_name);
     size_t bytes_read;
 
     /* Ensure we are starting on an even boundry, 4 sounded nice, since it's a typical word on 32bit systems */
     int evenboundry;
-    evenboundry = lseek(arch_fd, 0, SEEK_END) % 4;
-    write(arch_fd, "\n", evenboundry-1);
+    write(arch_fd, "\n", 1);
+    evenboundry = lseek(arch_fd, 0, SEEK_END) % 2;
+    if (evenboundry-1 != 0) {
+        write(arch_fd, "\n", evenboundry -1);
+    }
 
-    memcpy(header->ar_fmag, ARFMAG, sizeof(header->ar_fmag)); //places the header in the file.
-
+    write(arch_fd, (char *)buffer, sizeof(struct ar_hdr));//places the header in the file.
+    write(arch_fd, "\n", 1);
+    if (evenboundry-1 != 0)
+        write(arch_fd, "\n", evenboundry -1);
     while ((bytes_read = read(file_fd, buffer, BSIZE)) > 0) {
-        if (write(arch_fd, buffer, bytes_read) != bytes_read)
+        if (write(arch_fd, buffer, bytes_read) != bytes_read){
+
+            write(arch_fd, "\n\n", 2);
             return 1;
+        }
+
+
+        write(arch_fd, "\n\n", 2);
     }
 
     return 1;
