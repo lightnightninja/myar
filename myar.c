@@ -28,31 +28,33 @@
 #include <ar.h>
 
 /* function declarations */
-void print_usage(); //prints out how to use program
-void quick_append(); // handles -q
-void extract(); // handles -x
-void print_table(int);
-void delete(); // handles -d
-void append_all(); // handles -A
+void    print_usage(); //prints out how to use program
+void    quick_append(); // handles -q
+void    extract(); // handles -x
+void    print_table(int);
+void    delete(); // handles -d
+void    append_all(); // handles -A
+int     is_ar(int, char *, char);
 //void w(); //EXTRA CREDIT
 
-int  _verbose(const char **); // handles -v
-int _check_input(int, const char **, int);
-void _append();
-void _create_ar();
-int _is_file_path();
+int     _verbose(const char **); // handles -v
+int     _input(int, const char **, int);
+void    _append();
+int     _create_ar(char *);
+int     _is_file_path();
 
 
 int main(int argc, const char *argv[]) {
 
-    int     current = argv[1][1];
+    int     choice;
+    int     file_count = 0;
     int     v = 0;
     int     arch_name_pos = 2;
 
-    char    *arch;
-    //int     arch_fd;
+    char    *arch = NULL;
+    int     arch_fd;
 
-    /* ensuring correct input */
+    /* ensuring correct input, and that archive recieves .a extention */
     if (argv[1][1] == 't') {
         v = _verbose(argv);
         if (v == 1)
@@ -60,17 +62,21 @@ int main(int argc, const char *argv[]) {
         if (v == 0)
             v = 1;
     }
-
-    if(_check_input(argc, argv, arch_name_pos) == 1){
-        printf("Using archive: %s\n", argv[arch_name_pos]);
+    if(_input(argc, argv, arch_name_pos) == 1) {
+        printf("Using archive: %s\n", argv[arch_name_pos]);//debug
         arch = (char*)argv[arch_name_pos];
+        choice = argv[1][1];
+        file_count = argc - arch_name_pos - 1;
+        arch_fd = open(arch, O_RDWR);
+        printf("file count: %i\n", file_count);//debug
     }
-
     else
-        printf("Invalid archive.\n");
+        fprintf(stderr, "Invalid archive name.\n");
 
+    arch_fd = is_ar(arch_fd, arch, choice);
+    printf("fd = %i\n", arch_fd);
     /* Controls what happens when the flags are recieved*/
-    switch (current) {
+    switch (choice) {
         case 'q':
             quick_append();
             break;
@@ -96,13 +102,14 @@ int main(int argc, const char *argv[]) {
             break;
     }
 
-
+    if (close(arch_fd) == -1) {
+        printf("There was an issue with closing the file... Hopefully everything is okay.\n");
+    }
 
     /* -w Extra credit: for a given timeout, add all modified files to the archive. (except the archive itself) */
 
     return 0;
 }
-
 
 
 /* -q quickly append named files to archive */
@@ -127,10 +134,8 @@ void print_table(int verbose){
     printf("I recieved a t!\n");
 
 }
-
-
 /* returns whether or not the table is going to be printed in verbose mode */
-int verbose(const char **argv){
+int _verbose(const char **argv){
 
     if (argv[1][1] == 't') {
 
@@ -144,8 +149,7 @@ int verbose(const char **argv){
 
     return -1;
 
-}
-
+}//√
 
 /* -d delete named files from the archive */
 void delete(){
@@ -179,14 +183,13 @@ void print_usage(){
            //"            myar -w archive [file ...]\n"
            );
     
-}
+}//√
 
-
-int _check_input(int argc, const char *argv[], int arch_name_pos){
+int _input(int argc, const char *argv[], int arch_name_pos){
 
     /* No arguments passed */
     if (argc == 1 || argc == 2)
-        print_usage();
+        return 0;
 
     /* checks to make sure that the archive has "valid" extention */
     for (int i = 0; i < sizeof(argv[arch_name_pos])/sizeof(char); i++){
@@ -203,27 +206,37 @@ int _check_input(int argc, const char *argv[], int arch_name_pos){
     print_usage();
     return 0;
 
+}//√
+
+int is_ar(int fd, char *arch, char c){
+
+    printf("fd = %i\n", fd);
+    
+    if (fd == -1) {
+        fd = _create_ar(arch);
+    }
+    return fd;
 }
 
-void _append(){}
+int _create_ar(char *file_name){
 
+    int fd;
+    int flags = (O_RDWR | O_CREAT | O_EXCL);
 
-int _is_ar(){
+    if ((fd = open(file_name, flags, 0666)) == -1)
+        return -1;
 
-    return 1;
+    write(fd, ARMAG, SARMAG);
+
+    return fd;
 }
 
-int _is_file_path(){
-
-
-    return 0;
-}
-/* this is used to give a default name in case of no archive name being specified? */
-void _create_ar(){
-
+void _append(){
 
 
 }
+
+
 
 
 /* ~~~~~~ Notes ~~~~~~ */
