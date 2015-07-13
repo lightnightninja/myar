@@ -40,7 +40,7 @@ int     is_ar(int, char *, char);
 int     _verbose(const char **); // handles -v
 int     _input(int, const char **, int);
 void    _append();
-int     _create_ar(char *);
+int     _create_ar(char *, int);
 int     _is_file_path();
 
 
@@ -75,6 +75,11 @@ int main(int argc, const char *argv[]) {
 
     arch_fd = is_ar(arch_fd, arch, choice);
     printf("fd = %i\n", arch_fd);
+    if (arch_fd == -1) {
+        print_usage();
+        exit(EXIT_FAILURE);
+    }
+    printf("testing if I get here\n");
     /* Controls what happens when the flags are recieved*/
     switch (choice) {
         case 'q':
@@ -99,8 +104,10 @@ int main(int argc, const char *argv[]) {
 
         default:
             print_usage();
-            break;
+            exit(EXIT_FAILURE);
     }
+
+
 
     if (close(arch_fd) == -1) {
         printf("There was an issue with closing the file... Hopefully everything is okay.\n");
@@ -210,20 +217,38 @@ int _input(int argc, const char *argv[], int arch_name_pos){
 
 int is_ar(int fd, char *arch, char c){
 
-    printf("fd = %i\n", fd);
+    char buffer[SARMAG]; //this is used to see if the header on the archive is correct
     
-    if (fd == -1) {
-        fd = _create_ar(arch);
+    if (fd == -1 && (c == 'q' || c == 'A')) {
+        fd = _create_ar(arch, fd);
     }
-    return fd;
+    else if (fd == -1){
+        fprintf(stderr, "Error finding archive. Please enter a valid name.\n");
+        return -1;
+    }
+
+    if(lseek(fd, 0, SEEK_SET) != 0){ //if the seek was unsucessful, somethign is wrong
+        fprintf(stderr, "Something isn't right... Please check the archive file. \n");
+        return -1;
+    }
+
+    if(read(fd, buffer, SARMAG) == SARMAG){
+        if (strncmp(ARMAG, buffer, SARMAG) == 0){
+            printf("Valid archive file.\n");//debug
+            return fd;
+        }
+
+    }
+
+    return -1;
 }
 
-int _create_ar(char *file_name){
+int _create_ar(char *file_name, int fd){
 
-    int fd;
+
     int flags = (O_RDWR | O_CREAT | O_EXCL);
 
-
+    printf("The FD is: %i\n", fd);//debug
     mode_t perms = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
     fchmod(fd, perms);
 
@@ -231,8 +256,10 @@ int _create_ar(char *file_name){
         return -1;
 
     write(fd, ARMAG, SARMAG);
+    printf("The FD is: %i\n", fd);//debug
 
     return fd;
+
 }
 
 void _append(){
