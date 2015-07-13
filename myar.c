@@ -221,11 +221,13 @@ int is_ar(int fd, char *arch, char c){
 int _create_ar(char *file_name){
 
     int fd;
-    mode_t perms = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
     int flags = (O_RDWR | O_CREAT | O_EXCL);
+
+
+    mode_t perms = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
     fchmod(fd, perms);
 
-    if ((fd = open(file_name, flags, 0666)) == -1)
+    if ((fd = open(file_name, flags, perms)) == -1)
         return -1;
 
     write(fd, ARMAG, SARMAG);
