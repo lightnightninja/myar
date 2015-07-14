@@ -256,15 +256,51 @@ void _file_perms(){
      */
 
 }
+
+int seek_data(int arch_fd, int empty){
+
+    off_t offset;
+    int count = 0;
+    int found_data = 0;
+    char buffer[empty*2];
+
+
+    if((offset = read(arch_fd, buffer, empty*2)) <= empty)
+         return -1;
+
+    printf("bytes read from seek_data = %lli\n", offset); //debug
+    for (int i = 0; found_data != 1 && i < offset; i++) {
+        if (buffer[i] == 0) {
+            count++;
+            found_data = 0;
+        }
+        if (count % 100 == 0) {
+            printf("The count of empty bytes is: %i out of %i bytes read\n", count, i);
+        }
+        else if(buffer[i] != 0){
+            count = 0;
+            // this checks that there is at least a chunk of empty space big enough to be the offset.
+            if (offset - i < empty) {
+                return -1;
+            }
+        }
+        if (count >= empty && buffer[i+1] != 0) {
+            return i;
+        }
+        else if(buffer[i] != 0 && buffer[i+57] == '`' && buffer[i+58] == '\n') //ARFMAG
+            return i;
+    }
+
+    return -1;
+}
 /* -t print a concise table of contents of the archive */
 void print_table(int verbose, int arch_fd){
 
     struct  ar_hdr *temp = malloc(sizeof(struct ar_hdr)); //storing the new header in temp, so we can access stuffs.
     off_t offset;
 
-    lseek(arch_fd, SARMAG, SEEK_SET);
+    offset = lseek(arch_fd, SARMAG, SEEK_SET);
 
-    offset = lseek(arch_fd, BSIZE, SEEK_DATA);
 
 
     /* go fetch all of the names */
