@@ -22,6 +22,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <dirent.h>
 /* 
  * Information on how to use this found at:
  * http://www.mit.edu/afs.new/athena/system/rs_aix32/os/usr/include/ar.h 
@@ -34,7 +35,7 @@ int     append(char *, int, int); // handles -q
 void    extract(); // handles -x
 void    print_table(int);
 void    delete(); // handles -d
-void    append_all(); // handles -A
+int    append_all(); // handles -A
 int     is_ar(int, char *, char);
 //void w(); //EXTRA CREDIT
 
@@ -116,7 +117,13 @@ int main(int argc, const char *argv[]) {
             break;
 
         case 'A':
-            append_all();
+            if (file_count == 0) {
+                append_all(arch, arch_fd, file_fd);
+                close(file_fd);
+            }
+
+            else
+                fprintf(stderr, "Please only enter the archive name, no files.\n");
             break;
 
         default:
@@ -230,9 +237,34 @@ void delete(){
 
 
 /* -A quickly append all “regular” files in the current directory (except the archive itself) */
-void append_all(){
+int append_all(char *arch_name, int arch_fd){
+
+    DIR *cur = opendir(".");
+    struct dirent *file;
+    int file_fd;
+
+    /* Following code modified from: http://pubs.opengroup.org/onlinepubs/7908799/xsh/readdir.html*/
+    while ((file = readdir(cur)) != NULL) {
+        if ((file->d_type == DT_REG) && strcmp(file->d_name, arch_name) != 0) { //checking that we aren't looking at our arch
+            if((file_fd = open(file->d_name, O_RDONLY)) != -1){
+                append(file->d_name, arch_fd, file_fd);
+                close(file_fd);
+            }
+
+            else
+               fprintf(stderr, "Error opening file: %s\n", file->d_name);
+        }
+
+    }
+
+    if (closedir(cur) == -1){
+        fprintf(stderr, "Couldn't close the directory...\n");
+        return -1;
+    }
+
 
     printf("I recieved an A!\n");
+    return 1;
 
 }
 
