@@ -170,31 +170,17 @@ int append(char *file_name, int arch_fd, int file_fd){
 
     /* This allows to differentiate the boundaries between files, making searching easy */
 
-    char empty[EMPTYSPACE];
-    for (int i = 0; i < EMPTYSPACE; i++) {
-        empty[i] = 0;
-    }
     char newlines[]={10, 10, 10, 10};
-    char text[BSIZE];
-    for (int i = 0; i < BSIZE; i++) {
-        text[i] = 0;
-    }
+
     /* Ensure we are starting on an even boundry */
     int evenboundry;
     char blank[] = {0};
-    evenboundry = lseek(arch_fd, 0, SEEK_END) % 4;
+    evenboundry = lseek(arch_fd, 0, SEEK_END) % 2;
     if (evenboundry != 0) {
-        for (int i = 4-evenboundry; i > 0; i--) {
-            if(write(arch_fd, blank, 1) == -1)
-                return -1;
-        }
+        if(write(arch_fd, blank, 1) == -1)
+            return -1;
     }
-    if(write(arch_fd, empty, EMPTYSPACE) == -1)
-        return -1;
-
     /* Places the header in the file. */
-    if(write(arch_fd, (char *)buffer, sizeof(struct ar_hdr)) == -1)
-        return -1;
     if(write(arch_fd, (char *)buffer, sizeof(struct ar_hdr)) == -1)
         return -1;
     /* Transfers data from file to archive */
@@ -203,7 +189,8 @@ int append(char *file_name, int arch_fd, int file_fd){
             return -1;
         }
     }
-    write(arch_fd, newlines, 4);
+    write(arch_fd, newlines, 2);
+    printf("End of append\n");
     return 1;
 
 }
@@ -250,64 +237,41 @@ void _file_perms(){
 int seek_data(int arch_fd, int empty){
 
     off_t offset;
-    int count = 0;
-    int found_data = 0;
     char buffer[empty*2];
 
-
-    if((offset = read(arch_fd, buffer, empty*2)) <= empty)
+    if((offset = read(arch_fd, buffer, empty*2)) == 0)
          return -1;
 
+
     printf("bytes read from seek_data = %lli\n", offset); //debug
-    for (int i = 0; found_data != 1 && i < offset; i++) {
+    for (int i = 0; i < offset; i++) {
 
-        if (buffer[i] == 0) {
-            count++;
-            found_data = 0;
-        }
-
-        if (count >= empty && buffer[i+1] != 0) {
-            if(buffer[i+59] == '`' && buffer[i+60] == '\n') { //ARFMAG
-                printf("Found header, ARFMAG was found at %i.\n", i+1);//debug
-                return i;
-            }
-            printf("This would be the data I believe.\n");//debug
-            return i;
-        }
-        else if(buffer[i] != 0){
-            count = 0;
-            found_data = 1;
-            //this is on the off chance that the header didn't have enough of a buffer, or the other stuff was overwritten.
+        if (buffer[i] != 0 && buffer[i] != 10) {
             if(buffer[i+58] == '`' && buffer[i+59] == '\n') { //ARFMAG
-                printf("Found header, I think, except the empty space isn't enough.");//debug
+                printf("Found header, ARFMAG was found at %i.\n", i);//debug
                 return i;
             }
-            // this checks that there is at least a chunk of empty space big enough to be the offset.
-            if (offset - i - count < empty) { //the offset,
-                printf("Not enough space to be the gap\n");
-                return 0;
-            }
         }
-
+        else
+            offset++;
     }
-
-    return 0; //this is if for some reason it just didn't get to where it was supposed to be
+    return (int)offset;//didn't find header
 }
 
 /* Goes and fetches the header information*/
 off_t go_fetch(off_t offset, int arch_fd, struct ar_hdr *header){
 
     char buffer[AR_HDR_SIZE]; //no malloc because we are just storing stuff temp
-    char buffer2[EMPTYSPACE*2];
     off_t check;
-    int count = 0;
-    char c;
 
     if ((offset = lseek(arch_fd, 0, SEEK_CUR)) == -1) //Find archive size
         return -1;
     printf("The size of buffer is: %lu\n", sizeof(buffer));
 
-    while((offset = seek_data(arch_fd, EMPTYSPACE)) != 0) {
+    offset = (off_t)seek_data(arch_fd, EMPTYSPACE);
+
+    printf("offset = %lli\n", offset);
+    do {
         if (offset == -1){
             fprintf(stderr, "BAD1\n");
 
@@ -317,25 +281,17 @@ off_t go_fetch(off_t offset, int arch_fd, struct ar_hdr *header){
             fprintf(stderr, "BAD2\n");
             return -1;
         }
-        if(read(arch_fd, buffer2, sizeof(buffer2)) != -1){
+        printf("check = %lli\n", check);
+        if(read(arch_fd, buffer, AR_HDR_SIZE) != -1){
 
             printf("The buffer contains (we're in fetch): \n");
-            for (int i = 0; i < sizeof(buffer2); i++) {
-                if (buffer2[i] == 0 && count == 0) {
-                    offset++;
-                    count = 0;
-                }
-                else if(count < 60){
-                    if (buffer[i] == 0)
-                        buffer[i] = '0';
-                    c = buffer2[i];
-                    buffer[count] = c;
-                    count++;
-                }
+            for (int i = 0; i < sizeof(buffer); i++) {
+
+                if (buffer[i] == 0)
+                    buffer[i] = ' ';
+
             }
-            for (int i = 0; i < AR_HDR_SIZE; i++) {
-                printf("%c", buffer[i]);
-            }
+            fwrite(buffer,1,AR_HDR_SIZE,stdout);
             memcpy(header, buffer, AR_HDR_SIZE);
             printf("%-16s", header->ar_name);
             printf("%-12ld", atol(header->ar_date));
@@ -348,9 +304,10 @@ off_t go_fetch(off_t offset, int arch_fd, struct ar_hdr *header){
             if(lseek(arch_fd, (atoll)(header->ar_size), SEEK_CUR) == -1)
                 return -1;
             return 1;
-        }
 
-    }
+        }
+    } while((offset = seek_data(arch_fd, EMPTYSPACE)) == 0);
+
     fprintf(stderr, "BAD3\n");
     return -1;
     
@@ -369,14 +326,6 @@ void print_table(int verbose, int arch_fd){
         if (verbose == -1) {
             printf("Here is the header name: %s\n", header->ar_name);
         }
-        printf("%-16s", header->ar_name);
-        printf("%-12ld", atol(header->ar_date));
-        printf("%-6ld", atol(header->ar_uid ));
-        printf("%-6ld", atol(header->ar_gid ));
-        printf("%-8o", atoi(header->ar_mode));
-        printf("%-10lld", atoll(header->ar_size));
-        printf("%s", header->ar_fmag);
-
     }
     printf("I recieved a t!\n");//debug
     free(header);
