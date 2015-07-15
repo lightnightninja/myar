@@ -68,18 +68,16 @@ int main(int argc, const char *argv[]) {
             v = 1;
     }
     if(_input(argc, argv, arch_name_pos) == 1) {
-        printf("Using archive: %s\n", argv[arch_name_pos]);//debug
+        //printf("Using archive: %s\n", argv[arch_name_pos]);//debug
         arch = (char*)argv[arch_name_pos];
         choice = argv[1][1];
         file_count = argc - arch_name_pos - 1;
         arch_fd = open(arch, O_RDWR);
-        printf("file count: %i\n", file_count);//debug
     }
     else
         fprintf(stderr, "Invalid archive name.\n");
 
     arch_fd = is_ar(arch_fd, arch, choice);
-    printf("fd = %i\n", arch_fd);
     if (arch_fd == -1) {
         print_usage();
         exit(EXIT_FAILURE);
@@ -95,6 +93,7 @@ int main(int argc, const char *argv[]) {
                     if ((file_fd = open(argv[file_pos], O_RDONLY)) != -1) {
                         if (append((char *)argv[file_pos], arch_fd, file_fd) == -1)
                             exit(EXIT_FAILURE);
+
                         close(file_fd);
                     }
                     else{
@@ -143,8 +142,8 @@ int main(int argc, const char *argv[]) {
     return 0;
 }
 
-
-struct ar_hdr *_create_header(int file_fd, char *file_name){
+//this used to be a struct ar * type, but I realized tehre was no point
+char *_create_header(int file_fd, char *file_name){
 
     struct ar_hdr *header = malloc(sizeof(struct ar_hdr));
     struct stat stats;
@@ -159,15 +158,19 @@ struct ar_hdr *_create_header(int file_fd, char *file_name){
     snprintf(header->ar_size, sizeof(header->ar_size), "%-10lld",(long long)stats.st_size);
     snprintf(header->ar_fmag, sizeof(ARFMAG), "%s", ARFMAG);
 
-    return header;
+    return (char*)header;
 }
 /* -q quickly append named files to archive */
 int append(char *file_name, int arch_fd, int file_fd){
 
-    struct ar_hdr *buffer = malloc(sizeof(struct ar_hdr));
+    char *buffer = malloc(sizeof(struct ar_hdr));
     buffer = _create_header(file_fd, file_name);
     size_t bytes_read;
-
+    for (int i = 0; i < AR_HDR_SIZE; i++) {
+        if (buffer[i] == 0) {
+            buffer[i] = ' ';
+        }
+    }
     /* This allows to differentiate the boundaries between files, making searching easy */
 
     char newlines[]={10, 10, 10, 10};
@@ -190,7 +193,6 @@ int append(char *file_name, int arch_fd, int file_fd){
         }
     }
     write(arch_fd, newlines, 2);
-    printf("End of append\n");
     return 1;
 
 }
@@ -221,7 +223,7 @@ int _verbose(const char **argv){
     
 }
 
-void _file_perms(){
+void _perms(){
 
     /* code used from example at: http://codewiki.wikidot.com/c:system-calls:stat
      * It uses a 'ternary if' statement to determine if the file has a - or r/w/x
@@ -231,9 +233,26 @@ void _file_perms(){
      * for this purpose, it just shortens the code a bit, rather than a bunch of
      * if and else statements.
      */
-
+//    printf("---------------------------\n");
+//    printf("File Size: \t\t%d bytes\n",fileStat.st_size);
+//    printf("Number of Links: \t%d\n",fileStat.st_nlink);
+//    printf("File inode: \t\t%d\n",fileStat.st_ino);
+//
+//    printf("File Permissions: \t");
+//    printf( (S_ISDIR(fileStat.st_mode)) ? "d" : "-");
+//    printf( (fileStat.st_mode & S_IRUSR) ? "r" : "-");
+//    printf( (fileStat.st_mode & S_IWUSR) ? "w" : "-");
+//    printf( (fileStat.st_mode & S_IXUSR) ? "x" : "-");
+//    printf( (fileStat.st_mode & S_IRGRP) ? "r" : "-");
+//    printf( (fileStat.st_mode & S_IWGRP) ? "w" : "-");
+//    printf( (fileStat.st_mode & S_IXGRP) ? "x" : "-");
+//    printf( (fileStat.st_mode & S_IROTH) ? "r" : "-");
+//    printf( (fileStat.st_mode & S_IWOTH) ? "w" : "-");
+//    printf( (fileStat.st_mode & S_IXOTH) ? "x" : "-");
+//    printf("\n\n");
 }
-
+void _time(){}
+/* Used to find headers, had to be totally reimplemented :( */
 int seek_data(int arch_fd, int empty){
 
     off_t bytes_read;
@@ -265,6 +284,7 @@ off_t go_fetch(off_t offset, int arch_fd, struct ar_hdr *header){
     while((check = seek_data(arch_fd, EMPTYSPACE)) != -1){
         offset +=check; //updating the place in file.
 
+        //printf("Check = %i\n", offset);
         if ((check = lseek(arch_fd, offset, SEEK_SET)) == 0) //Finds new place based on offset
             return -1;
         if (check == -1)
@@ -290,19 +310,23 @@ void print_table(int verbose, int arch_fd){
     //printf("verbose = %i\n", verbose);
     /* go fetch all of the names */
     while (go_fetch(offset, arch_fd, header) != -1) {
-        if (verbose == -1) {
-            printf("%s\n", header->ar_name);
+        //printf("offset1 = %lli\n", offset);
+        if(verbose == 0){
+            fwrite(header->ar_name, 1, 16, stdout); //kinda hacky(?) way around the '\0'
+            printf("\n");
         }
-        //printf("%-16s", header->ar_name);
-        //printf("%-12ld", atol(header->ar_date));
-//        printf("%-6ld", atol(header->ar_uid ));
-//        printf("%-6ld", atol(header->ar_gid ));
-//        printf("%-8o", atoi(header->ar_mode));
-//        printf("%-10lld", atoll(header->ar_size));
-//        printf("%s", header->ar_fmag);
-//        printf("\n");
-        offset = lseek(arch_fd, 60, SEEK_CUR);
-        //printf("offset = %lli\n", offset);
+
+        if (verbose == 1){
+            fwrite(header->ar_name, 1, 16, stdout);
+            printf("%-12ld", atol(header->ar_date));
+            printf("%-6ld", atol(header->ar_uid ));
+            printf("%-6ld", atol(header->ar_gid ));
+            printf("%-8o", atoi(header->ar_mode));
+            printf("%-10lld", atoll(header->ar_size));
+            printf("\n");
+        }
+        offset = lseek(arch_fd, atoll(header->ar_size), SEEK_CUR);
+
     }
     printf("I recieved a t!\n");//debug
     free(header);
@@ -408,7 +432,7 @@ int is_ar(int fd, char *arch, char c){
 
     if(read(fd, buffer, SARMAG) == SARMAG){
         if (strncmp(ARMAG, buffer, SARMAG) == 0){
-            printf("Valid archive file.\n");//debug
+            //printf("Valid archive file.\n");//debug
             return fd;
         }
 
@@ -422,7 +446,7 @@ int _create_ar(char *file_name, int fd){
 
     int flags = (O_RDWR | O_CREAT | O_EXCL);
 
-    printf("The FD is: %i\n", fd);//debug
+    //printf("The FD is: %i\n", fd);//debug
     mode_t perms = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
     fchmod(fd, perms);
 
@@ -430,7 +454,7 @@ int _create_ar(char *file_name, int fd){
         return -1;
 
     write(fd, ARMAG, SARMAG);
-    printf("The FD is: %i\n", fd);//debug
+    printf("Created: %s\n", file_name);//debug
 
     return fd;
 
