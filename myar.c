@@ -223,7 +223,7 @@ int _verbose(const char **argv){
     
 }
 
-void _perms(){
+char *_perms(const char *p){
 
     /* code used from example at: http://codewiki.wikidot.com/c:system-calls:stat
      * It uses a 'ternary if' statement to determine if the file has a - or r/w/x
@@ -233,23 +233,21 @@ void _perms(){
      * for this purpose, it just shortens the code a bit, rather than a bunch of
      * if and else statements.
      */
-//    printf("---------------------------\n");
-//    printf("File Size: \t\t%d bytes\n",fileStat.st_size);
-//    printf("Number of Links: \t%d\n",fileStat.st_nlink);
-//    printf("File inode: \t\t%d\n",fileStat.st_ino);
-//
-//    printf("File Permissions: \t");
-//    printf( (S_ISDIR(fileStat.st_mode)) ? "d" : "-");
-//    printf( (fileStat.st_mode & S_IRUSR) ? "r" : "-");
-//    printf( (fileStat.st_mode & S_IWUSR) ? "w" : "-");
-//    printf( (fileStat.st_mode & S_IXUSR) ? "x" : "-");
-//    printf( (fileStat.st_mode & S_IRGRP) ? "r" : "-");
-//    printf( (fileStat.st_mode & S_IWGRP) ? "w" : "-");
-//    printf( (fileStat.st_mode & S_IXGRP) ? "x" : "-");
-//    printf( (fileStat.st_mode & S_IROTH) ? "r" : "-");
-//    printf( (fileStat.st_mode & S_IWOTH) ? "w" : "-");
-//    printf( (fileStat.st_mode & S_IXOTH) ? "x" : "-");
-//    printf("\n\n");
+    mode_t octal = (mode_t)strtol(p, NULL, 8);
+    //this converts it to octal and needes mode_t in order to be able to compare with the different types)
+    static char perm[10]; //it yelled at me when it wasn't static.
+    perm[0] =  *((octal & S_IRUSR) ? "r" : "-");
+    perm[1] =  *((octal & S_IWUSR) ? "w" : "-");
+    perm[2] =  *((octal & S_IXUSR) ? "x" : "-");
+    perm[3] =  *((octal & S_IRGRP) ? "r" : "-");
+    perm[4] =  *((octal & S_IWGRP) ? "w" : "-");
+    perm[5] =  *((octal & S_IXGRP) ? "x" : "-");
+    perm[6] =  *((octal & S_IROTH) ? "r" : "-");
+    perm[7] =  *((octal & S_IWOTH) ? "w" : "-");
+    perm[8] =  *((octal & S_IXOTH) ? "x" : "-");
+    perm[9] = ' ';
+
+    return perm;
 }
 void _time(){}
 /* Used to find headers, had to be totally reimplemented :( */
@@ -305,30 +303,32 @@ void print_table(int verbose, int arch_fd){
 
     struct  ar_hdr *header = malloc(sizeof(struct ar_hdr)); //we have to malloc because the info needs updated in go_fetch
     off_t offset = 0;
-
+    char *perms = malloc(10); ///I couldn't free it because of the static char cast (I think)
     offset =lseek(arch_fd, SARMAG, SEEK_SET);
     //printf("verbose = %i\n", verbose);
     /* go fetch all of the names */
     while (go_fetch(offset, arch_fd, header) != -1) {
         //printf("offset1 = %lli\n", offset);
-        if(verbose == 0){
+        if(verbose == -1){
             fwrite(header->ar_name, 1, 16, stdout); //kinda hacky(?) way around the '\0'
             printf("\n");
         }
 
         if (verbose == 1){
-            fwrite(header->ar_name, 1, 16, stdout);
-            printf("%-12ld", atol(header->ar_date));
-            printf("%-6ld", atol(header->ar_uid ));
-            printf("%-6ld", atol(header->ar_gid ));
-            printf("%-8o", atoi(header->ar_mode));
+            perms = _perms(header->ar_mode);
+            printf("%-12s", perms);
+            printf("%ld/", atol(header->ar_uid));
+            printf("%ld", atol(header->ar_gid));
             printf("%-10lld", atoll(header->ar_size));
+            printf("%-12ld", atol(header->ar_date));
+            fwrite(header->ar_name, 1, 16, stdout);
+
             printf("\n");
         }
+
         offset = lseek(arch_fd, atoll(header->ar_size), SEEK_CUR);
 
     }
-    printf("I recieved a t!\n");//debug
     free(header);
 }
 
@@ -348,7 +348,9 @@ int append_all(char *arch_name, int arch_fd){
     struct dirent *file;
     int file_fd;
 
-    /* Following code modified from: http://pubs.opengroup.org/onlinepubs/7908799/xsh/readdir.html*/
+    /* Following code modified (totally changed) from:
+     * http://pubs.opengroup.org/onlinepubs/7908799/xsh/readdir.html
+     */
     while ((file = readdir(cur)) != NULL) {
         if ((file->d_type == DT_REG) && strcmp(file->d_name, arch_name) != 0 && strcmp(file->d_name, ".DS_Store") != 0 && strcmp(file->d_name, "myar.c") != 0) { //checking that we aren't looking at our arch
             if((file_fd = open(file->d_name, O_RDONLY)) != -1){
