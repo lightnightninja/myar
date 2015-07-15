@@ -236,26 +236,24 @@ void _file_perms(){
 
 int seek_data(int arch_fd, int empty){
 
-    off_t offset;
+    off_t bytes_read;
     char buffer[empty*2];
 
-    if((offset = read(arch_fd, buffer, empty*2)) == 0)
+    if((bytes_read = read(arch_fd, buffer, empty*2)) < 60)
          return -1;
 
 
-    printf("bytes read from seek_data = %lli\n", offset); //debug
-    for (int i = 0; i < offset; i++) {
+    //printf("bytes read from seek_data = %lli\n", bytes_read); //debug
+    for (int i = 0; i < bytes_read; i++) {
 
         if (buffer[i] != 0 && buffer[i] != 10) {
             if(buffer[i+58] == '`' && buffer[i+59] == '\n') { //ARFMAG
-                printf("Found header, ARFMAG was found at %i.\n", i);//debug
+                //printf("Found header, ARFMAG was found at %i.\n", i);//debug
                 return i;
             }
         }
-        else
-            offset++;
     }
-    return (int)offset;//didn't find header
+    return 0;//didn't find header
 }
 
 /* Goes and fetches the header information*/
@@ -264,51 +262,21 @@ off_t go_fetch(off_t offset, int arch_fd, struct ar_hdr *header){
     char buffer[AR_HDR_SIZE]; //no malloc because we are just storing stuff temp
     off_t check;
 
-    if ((offset = lseek(arch_fd, 0, SEEK_CUR)) == -1) //Find archive size
-        return -1;
-    printf("The size of buffer is: %lu\n", sizeof(buffer));
+    while((check = seek_data(arch_fd, EMPTYSPACE)) != -1){
+        offset +=check; //updating the place in file.
 
-    offset = (off_t)seek_data(arch_fd, EMPTYSPACE);
-
-    printf("offset = %lli\n", offset);
-    do {
-        if (offset == -1){
-            fprintf(stderr, "BAD1\n");
-
+        if ((check = lseek(arch_fd, offset, SEEK_SET)) == 0) //Finds new place based on offset
             return -1;
-        }
-        if ((check = lseek(arch_fd, offset, SEEK_CUR)) == -1) { //Find archive size
-            fprintf(stderr, "BAD2\n");
+        if (check == -1)
             return -1;
-        }
-        printf("check = %lli\n", check);
-        if(read(arch_fd, buffer, AR_HDR_SIZE) != -1){
-
-            printf("The buffer contains (we're in fetch): \n");
-            for (int i = 0; i < sizeof(buffer); i++) {
-
-                if (buffer[i] == 0)
-                    buffer[i] = ' ';
-
-            }
-            fwrite(buffer,1,AR_HDR_SIZE,stdout);
+        if((check = read(arch_fd, buffer, AR_HDR_SIZE)) != -1){
             memcpy(header, buffer, AR_HDR_SIZE);
-            printf("%-16s", header->ar_name);
-            printf("%-12ld", atol(header->ar_date));
-            printf("%-6ld", atol(header->ar_uid ));
-            printf("%-6ld", atol(header->ar_gid ));
-            printf("%-8o", atoi(header->ar_mode));
-            printf("%-10lld", atoll(header->ar_size));
-            printf("%s", header->ar_fmag);
-
-            if(lseek(arch_fd, (atoll)(header->ar_size), SEEK_CUR) == -1)
-                return -1;
             return 1;
-
         }
-    } while((offset = seek_data(arch_fd, EMPTYSPACE)) == 0);
+        else
+            return -1;
 
-    fprintf(stderr, "BAD3\n");
+    }
     return -1;
     
 }
@@ -316,16 +284,25 @@ off_t go_fetch(off_t offset, int arch_fd, struct ar_hdr *header){
 void print_table(int verbose, int arch_fd){
 
     struct  ar_hdr *header = malloc(sizeof(struct ar_hdr)); //we have to malloc because the info needs updated in go_fetch
-    off_t offset;
-    printf("The size of ar_hdr in table is: %lu\n", sizeof(struct ar_hdr));
-    offset = lseek(arch_fd, SARMAG, SEEK_SET);
+    off_t offset = 0;
 
-    printf("verbose = %i\n", verbose);
+    offset =lseek(arch_fd, SARMAG, SEEK_SET);
+    //printf("verbose = %i\n", verbose);
     /* go fetch all of the names */
     while (go_fetch(offset, arch_fd, header) != -1) {
         if (verbose == -1) {
-            printf("Here is the header name: %s\n", header->ar_name);
+            printf("%s\n", header->ar_name);
         }
+        //printf("%-16s", header->ar_name);
+        //printf("%-12ld", atol(header->ar_date));
+//        printf("%-6ld", atol(header->ar_uid ));
+//        printf("%-6ld", atol(header->ar_gid ));
+//        printf("%-8o", atoi(header->ar_mode));
+//        printf("%-10lld", atoll(header->ar_size));
+//        printf("%s", header->ar_fmag);
+//        printf("\n");
+        offset = lseek(arch_fd, 60, SEEK_CUR);
+        //printf("offset = %lli\n", offset);
     }
     printf("I recieved a t!\n");//debug
     free(header);
