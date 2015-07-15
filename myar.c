@@ -327,10 +327,10 @@ void print_table(int verbose, int arch_fd){
 
         if (verbose == 1){
             printf("%-10s", _perms(header->ar_mode));
-            printf("%6ld/", atol(header->ar_uid));
+            printf("%-ld/", atol(header->ar_uid));
             printf("%-6ld", atol(header->ar_gid));
             printf("%6lld ", atoll(header->ar_size));
-            printf("%-20s", whats_the_time(atol(header->ar_date)));
+            printf("%-18s", whats_the_time(atol(header->ar_date)));
             fwrite(header->ar_name, 1, 16, stdout);
 
             printf("\n");
