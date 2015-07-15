@@ -9,7 +9,7 @@
 #define _POSIX_C_SOURCE 200809L
 #define _BSD_SOURCE
 #define BSIZE 256 // Default buffer size
-#define SPACE 1024
+#define EMPTYSPACE 1024
 #ifndef AR_HDR_SIZE
 #define AR_HDR_SIZE 60
 #endif
@@ -146,33 +146,39 @@ int main(int argc, const char *argv[]) {
 
 struct ar_hdr *_create_header(int file_fd, char *file_name){
 
-    struct ar_hdr temp[sizeof(struct ar_hdr)];
     struct ar_hdr *header = malloc(sizeof(struct ar_hdr));
     struct stat stats;
 
     lstat(file_name, &stats);
 
-    snprintf(temp->ar_name, sizeof(temp->ar_name), "%-16s",  file_name);
-    snprintf(temp->ar_date, sizeof(temp->ar_date), "%-12ld", (long)stats.st_mtime);
-    snprintf(temp->ar_uid,  sizeof(temp->ar_uid),  "%-6ld",  (long)stats.st_uid);
-    snprintf(temp->ar_gid,  sizeof(temp->ar_gid),  "%-6ld",  (long)stats.st_gid);
-    snprintf(temp->ar_mode, sizeof(temp->ar_mode), "%-8o",   stats.st_mode);
-    snprintf(temp->ar_size, sizeof(temp->ar_size), "%-10lld",(long long)stats.st_size);
-    snprintf(temp->ar_fmag, sizeof(ARFMAG), "%s", ARFMAG);
+    snprintf(header->ar_name, sizeof(header->ar_name), "%-16s",  file_name);
+    snprintf(header->ar_date, sizeof(header->ar_date), "%-12ld", (long)stats.st_mtime);
+    snprintf(header->ar_uid,  sizeof(header->ar_uid),  "%-6ld",  (long)stats.st_uid);
+    snprintf(header->ar_gid,  sizeof(header->ar_gid),  "%-6ld",  (long)stats.st_gid);
+    snprintf(header->ar_mode, sizeof(header->ar_mode), "%-8o",   stats.st_mode);
+    snprintf(header->ar_size, sizeof(header->ar_size), "%-10lld",(long long)stats.st_size);
+    snprintf(header->ar_fmag, sizeof(ARFMAG), "%s", ARFMAG);
 
     return header;
 }
 /* -q quickly append named files to archive */
 int append(char *file_name, int arch_fd, int file_fd){
 
-    struct ar_hdr *buffer;
+    struct ar_hdr *buffer = malloc(sizeof(struct ar_hdr));
     buffer = _create_header(file_fd, file_name);
     size_t bytes_read;
 
     /* This allows to differentiate the boundaries between files, making searching easy */
 
-
-    char newlines[]={10, 10};
+    char empty[EMPTYSPACE];
+    for (int i = 0; i < EMPTYSPACE; i++) {
+        empty[i] = 0;
+    }
+    char newlines[]={10, 10, 10, 10};
+    char text[BSIZE];
+    for (int i = 0; i < BSIZE; i++) {
+        text[i] = 0;
+    }
     /* Ensure we are starting on an even boundry */
     int evenboundry;
     char blank[] = {0};
@@ -183,7 +189,12 @@ int append(char *file_name, int arch_fd, int file_fd){
                 return -1;
         }
     }
+    if(write(arch_fd, empty, EMPTYSPACE) == -1)
+        return -1;
+
     /* Places the header in the file. */
+    if(write(arch_fd, (char *)buffer, sizeof(struct ar_hdr)) == -1)
+        return -1;
     if(write(arch_fd, (char *)buffer, sizeof(struct ar_hdr)) == -1)
         return -1;
     /* Transfers data from file to archive */
@@ -240,21 +251,22 @@ int seek_data(int arch_fd, int empty){
 
     off_t offset;
     int count = 0;
+    int found_data = 0;
     char buffer[empty*2];
 
 
-    if((offset = read(arch_fd, buffer, empty)) == -1)
+    if((offset = read(arch_fd, buffer, empty*2)) <= empty)
          return -1;
 
-
     printf("bytes read from seek_data = %lli\n", offset); //debug
-    for (int i = 0; i < offset; i++) {
+    for (int i = 0; found_data != 1 && i < offset; i++) {
 
-        if (buffer[i] == '\n') {
+        if (buffer[i] == 0) {
             count++;
+            found_data = 0;
         }
 
-        if (buffer[i] == '\n' && buffer[i+1] != '\n') {
+        if (count >= empty && buffer[i+1] != 0) {
             if(buffer[i+59] == '`' && buffer[i+60] == '\n') { //ARFMAG
                 printf("Found header, ARFMAG was found at %i.\n", i+1);//debug
                 return i;
@@ -262,9 +274,19 @@ int seek_data(int arch_fd, int empty){
             printf("This would be the data I believe.\n");//debug
             return i;
         }
-        else if(buffer[i] != '\n' && buffer[i] != '\0'){
+        else if(buffer[i] != 0){
             count = 0;
-
+            found_data = 1;
+            //this is on the off chance that the header didn't have enough of a buffer, or the other stuff was overwritten.
+            if(buffer[i+58] == '`' && buffer[i+59] == '\n') { //ARFMAG
+                printf("Found header, I think, except the empty space isn't enough.");//debug
+                return i;
+            }
+            // this checks that there is at least a chunk of empty space big enough to be the offset.
+            if (offset - i - count < empty) { //the offset,
+                printf("Not enough space to be the gap\n");
+                return 0;
+            }
         }
 
     }
@@ -276,7 +298,7 @@ int seek_data(int arch_fd, int empty){
 off_t go_fetch(off_t offset, int arch_fd, struct ar_hdr *header){
 
     char buffer[AR_HDR_SIZE]; //no malloc because we are just storing stuff temp
-    char buffer2[SPACE];
+    char buffer2[EMPTYSPACE*2];
     off_t check;
     int count = 0;
     char c;
@@ -285,7 +307,7 @@ off_t go_fetch(off_t offset, int arch_fd, struct ar_hdr *header){
         return -1;
     printf("The size of buffer is: %lu\n", sizeof(buffer));
 
-    while((offset = seek_data(arch_fd, SPACE)) != 0) {
+    while((offset = seek_data(arch_fd, EMPTYSPACE)) != 0) {
         if (offset == -1){
             fprintf(stderr, "BAD1\n");
 
@@ -297,18 +319,22 @@ off_t go_fetch(off_t offset, int arch_fd, struct ar_hdr *header){
         }
         if(read(arch_fd, buffer2, sizeof(buffer2)) != -1){
 
+            printf("The buffer contains (we're in fetch): \n");
             for (int i = 0; i < sizeof(buffer2); i++) {
-                if (buffer2[i] == '\n' && buffer2[i+1] != '\n') {
-                    if(buffer2[i+59] == '`' && buffer2[i+60] == '\n') { //ARFMAG
-                        printf("Found header, ARFMAG was found at %i.\n", i+1);//debug
-                    }
-                    printf("This would be the data I believe %i.\n", i+1);//debug
+                if (buffer2[i] == 0 && count == 0) {
+                    offset++;
+                    count = 0;
+                }
+                else if(count < 60){
+                    if (buffer[i] == 0)
+                        buffer[i] = '0';
+                    c = buffer2[i];
+                    buffer[count] = c;
+                    count++;
                 }
             }
-
-            printf("The buffer contains (we're in fetch): \n");
             for (int i = 0; i < AR_HDR_SIZE; i++) {
-                printf("%c", buffer2[i]);
+                printf("%c", buffer[i]);
             }
             memcpy(header, buffer, AR_HDR_SIZE);
             printf("%-16s", header->ar_name);
@@ -319,6 +345,8 @@ off_t go_fetch(off_t offset, int arch_fd, struct ar_hdr *header){
             printf("%-10lld", atoll(header->ar_size));
             printf("%s", header->ar_fmag);
 
+            if(lseek(arch_fd, (atoll)(header->ar_size), SEEK_CUR) == -1)
+                return -1;
             return 1;
         }
 
