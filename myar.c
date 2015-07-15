@@ -93,7 +93,7 @@ int main(int argc, const char *argv[]) {
             if (file_count != 0) {
                 for (int i = 0; i < file_count; i++, file_pos++) {
                     if ((file_fd = open(argv[file_pos], O_RDONLY)) != -1) {
-                        if (append(arch, arch_fd, file_fd) == -1)
+                        if (append((char *)argv[file_pos], arch_fd, file_fd) == -1)
                             exit(EXIT_FAILURE);
                         close(file_fd);
                     }
