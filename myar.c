@@ -195,8 +195,6 @@ int append(char *file_name, int arch_fd, int file_fd){
     /* Places the header in the file. */
     if(write(arch_fd, (char *)buffer, sizeof(struct ar_hdr)) == -1)
         return -1;
-    if(write(arch_fd, (char *)buffer, sizeof(struct ar_hdr)) == -1)
-        return -1;
     /* Transfers data from file to archive */
     while ((bytes_read = read(file_fd, buffer, BSIZE)) > 0) {
         if (write(arch_fd, buffer, bytes_read) != bytes_read) { //checking to make sure we don't have a write error
@@ -331,6 +329,9 @@ off_t go_fetch(off_t offset, int arch_fd, struct ar_hdr *header){
                     c = buffer2[i];
                     buffer[count] = c;
                     count++;
+                }
+                if (count >= 60) {
+                    break;
                 }
             }
             for (int i = 0; i < AR_HDR_SIZE; i++) {
