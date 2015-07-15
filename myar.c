@@ -249,7 +249,11 @@ char *_perms(const char *p){
 
     return perm;
 }
-void _time(){}
+char *whats_the_time(long time){
+    char *bla = malloc(26);
+    strftime(bla, 26, "%b %d %R %Y", localtime(&time));
+    return bla;
+}
 /* Used to find headers, had to be totally reimplemented :( */
 int seek_data(int arch_fd, int empty){
 
@@ -303,7 +307,6 @@ void print_table(int verbose, int arch_fd){
 
     struct  ar_hdr *header = malloc(sizeof(struct ar_hdr)); //we have to malloc because the info needs updated in go_fetch
     off_t offset = 0;
-    char *perms = malloc(10); ///I couldn't free it because of the static char cast (I think)
     offset =lseek(arch_fd, SARMAG, SEEK_SET);
     //printf("verbose = %i\n", verbose);
     /* go fetch all of the names */
@@ -315,12 +318,11 @@ void print_table(int verbose, int arch_fd){
         }
 
         if (verbose == 1){
-            perms = _perms(header->ar_mode);
-            printf("%-12s", perms);
-            printf("%ld/", atol(header->ar_uid));
-            printf("%ld", atol(header->ar_gid));
+            printf("%-12s", _perms(header->ar_mode));
+            printf("%6ld/", atol(header->ar_uid));
+            printf("%-6ld", atol(header->ar_gid));
             printf("%-10lld", atoll(header->ar_size));
-            printf("%-12ld", atol(header->ar_date));
+            printf("%-26s", whats_the_time(atol(header->ar_date)));
             fwrite(header->ar_name, 1, 16, stdout);
 
             printf("\n");
@@ -462,7 +464,14 @@ int _create_ar(char *file_name, int fd){
 
 }
 
-
+/* Todo */
+/* Extract
+ * * deal with atime and mtime
+ * Delete
+ * Fix Permissions of files
+ * extra credit?
+ * write up
+ */
 
 
 /* ~~~~~~ Notes ~~~~~~ */
