@@ -327,7 +327,7 @@ void print_table(int verbose, int arch_fd){
 
         if (verbose == 1){
             printf("%-12s", _perms(header->ar_mode));
-            printf("%6ld/", atol(header->ar_uid));
+            printf("%-6ld/", atol(header->ar_uid));
             printf("%-6ld", atol(header->ar_gid));
             printf("%-10lld", atoll(header->ar_size));
             printf("%-26s", whats_the_time(atol(header->ar_date)));
