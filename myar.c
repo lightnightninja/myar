@@ -10,6 +10,9 @@
 #define _BSD_SOURCE
 #define BSIZE 256 // Default buffer size
 #define EMPTYSPACE 1024
+#ifndef AR_HDR_SIZE
+#define AR_HDR_SIZE 60
+#endif
 
 #include <sys/types.h>
 #include <unistd.h>
@@ -108,7 +111,6 @@ int main(int argc, const char *argv[]) {
 
         case 't':
             print_table(v, arch_fd);
-            close(arch_fd);
             break;
 
         case 'd':
@@ -168,12 +170,15 @@ int append(char *file_name, int arch_fd, int file_fd){
 
     /* This allows to differentiate the boundaries between files, making searching easy */
 
-    char empty[EMPTYSPACE]; // I just realized this could be done using the offset in lseek...
+    char empty[EMPTYSPACE];
     for (int i = 0; i < EMPTYSPACE; i++) {
         empty[i] = 0;
     }
     char newlines[]={10, 10, 10, 10};
-
+    char text[BSIZE];
+    for (int i = 0; i < BSIZE; i++) {
+        text[i] = 0;
+    }
     /* Ensure we are starting on an even boundry */
     int evenboundry;
     char blank[] = {0};
@@ -190,7 +195,8 @@ int append(char *file_name, int arch_fd, int file_fd){
     /* Places the header in the file. */
     if(write(arch_fd, (char *)buffer, sizeof(struct ar_hdr)) == -1)
         return -1;
-
+    if(write(arch_fd, (char *)buffer, sizeof(struct ar_hdr)) == -1)
+        return -1;
     /* Transfers data from file to archive */
     while ((bytes_read = read(file_fd, buffer, BSIZE)) > 0) {
         if (write(arch_fd, buffer, bytes_read) != bytes_read) { //checking to make sure we don't have a write error
@@ -210,23 +216,7 @@ void extract(){
 
 }
 
-/* Goes and fetches the header information*/
-off_t go_fetch(off_t offset, int arch_fd){
 
-    char *buffer = malloc(sizeof(struct ar_hdr));
-    off_t arch_size;
-    size_t bytes_read;
-
-    if ((arch_size = lseek(arch_fd, 0, SEEK_END)) == -1) //Find archive size
-        return -1;
-    while (bytes_read < arch_size) {
-        ;
-    }
-
-
-    return -1;
-
-}
 /* returns whether or not the table is going to be printed in verbose mode */
 int _verbose(const char **argv){
 
@@ -270,46 +260,126 @@ int seek_data(int arch_fd, int empty){
 
     printf("bytes read from seek_data = %lli\n", offset); //debug
     for (int i = 0; found_data != 1 && i < offset; i++) {
+
         if (buffer[i] == 0) {
             count++;
             found_data = 0;
         }
-        if (count % 100 == 0) {
-            printf("The count of empty bytes is: %i out of %i bytes read\n", count, i);
+
+        if (count >= empty && buffer[i+1] != 0) {
+            if(buffer[i+59] == '`' && buffer[i+60] == '\n') { //ARFMAG
+                printf("Found header, ARFMAG was found at %i.\n", i+1);//debug
+                return i;
+            }
+            printf("This would be the data I believe.\n");//debug
+            return i;
         }
         else if(buffer[i] != 0){
             count = 0;
+            found_data = 1;
+            //this is on the off chance that the header didn't have enough of a buffer, or the other stuff was overwritten.
+            if(buffer[i+58] == '`' && buffer[i+59] == '\n') { //ARFMAG
+                printf("Found header, I think, except the empty space isn't enough.");//debug
+                return i;
+            }
             // this checks that there is at least a chunk of empty space big enough to be the offset.
-            if (offset - i < empty) {
-                return -1;
+            if (offset - i - count < empty) { //the offset,
+                printf("Not enough space to be the gap\n");
+                return 0;
             }
         }
-        if (count >= empty && buffer[i+1] != 0) {
-            return i;
-        }
-        else if(buffer[i] != 0 && buffer[i+57] == '`' && buffer[i+58] == '\n') //ARFMAG
-            return i;
+
     }
 
+    return 0; //this is if for some reason it just didn't get to where it was supposed to be
+}
+
+/* Goes and fetches the header information*/
+off_t go_fetch(off_t offset, int arch_fd, struct ar_hdr *header){
+
+    char buffer[AR_HDR_SIZE]; //no malloc because we are just storing stuff temp
+    char buffer2[EMPTYSPACE*2];
+    off_t check;
+    int count = 0;
+    char c;
+
+    if ((offset = lseek(arch_fd, 0, SEEK_CUR)) == -1) //Find archive size
+        return -1;
+    printf("The size of buffer is: %lu\n", sizeof(buffer));
+
+    while((offset = seek_data(arch_fd, EMPTYSPACE)) != 0) {
+        if (offset == -1){
+            fprintf(stderr, "BAD1\n");
+
+            return -1;
+        }
+        if ((check = lseek(arch_fd, offset, SEEK_CUR)) == -1) { //Find archive size
+            fprintf(stderr, "BAD2\n");
+            return -1;
+        }
+        if(read(arch_fd, buffer2, sizeof(buffer2)) != -1){
+
+            printf("The buffer contains (we're in fetch): \n");
+            for (int i = 0; i < sizeof(buffer2); i++) {
+                if (buffer2[i] == 0 && count == 0) {
+                    offset++;
+                    count = 0;
+                }
+                else if(count < 60){
+                    if (buffer[i] == 0)
+                        buffer[i] = '0';
+                    c = buffer2[i];
+                    buffer[count] = c;
+                    count++;
+                }
+            }
+            for (int i = 0; i < AR_HDR_SIZE; i++) {
+                printf("%c", buffer[i]);
+            }
+            memcpy(header, buffer, AR_HDR_SIZE);
+            printf("%-16s", header->ar_name);
+            printf("%-12ld", atol(header->ar_date));
+            printf("%-6ld", atol(header->ar_uid ));
+            printf("%-6ld", atol(header->ar_gid ));
+            printf("%-8o", atoi(header->ar_mode));
+            printf("%-10lld", atoll(header->ar_size));
+            printf("%s", header->ar_fmag);
+
+            if(lseek(arch_fd, (atoll)(header->ar_size), SEEK_CUR) == -1)
+                return -1;
+            return 1;
+        }
+
+    }
+    fprintf(stderr, "BAD3\n");
     return -1;
+    
 }
 /* -t print a concise table of contents of the archive */
 void print_table(int verbose, int arch_fd){
 
-    struct  ar_hdr *temp = malloc(sizeof(struct ar_hdr)); //storing the new header in temp, so we can access stuffs.
+    struct  ar_hdr *header = malloc(sizeof(struct ar_hdr)); //we have to malloc because the info needs updated in go_fetch
     off_t offset;
-
+    printf("The size of ar_hdr in table is: %lu\n", sizeof(struct ar_hdr));
     offset = lseek(arch_fd, SARMAG, SEEK_SET);
 
-
-
+    printf("verbose = %i\n", verbose);
     /* go fetch all of the names */
-    while (go_fetch(offset, arch_fd) != -1) {
-        printf("%s\n", temp->ar_name);
+    while (go_fetch(offset, arch_fd, header) != -1) {
+        if (verbose == -1) {
+            printf("Here is the header name: %s\n", header->ar_name);
+        }
+        printf("%-16s", header->ar_name);
+        printf("%-12ld", atol(header->ar_date));
+        printf("%-6ld", atol(header->ar_uid ));
+        printf("%-6ld", atol(header->ar_gid ));
+        printf("%-8o", atoi(header->ar_mode));
+        printf("%-10lld", atoll(header->ar_size));
+        printf("%s", header->ar_fmag);
+
     }
     printf("I recieved a t!\n");//debug
-    free(temp);
-
+    free(header);
 }
 
 
