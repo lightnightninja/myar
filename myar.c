@@ -330,7 +330,7 @@ void print_table(int verbose, int arch_fd){
             printf("%6ld/", atol(header->ar_uid));
             printf("%-6ld", atol(header->ar_gid));
             printf("%6lld ", atoll(header->ar_size));
-            printf("%-20s", whats_the_time(atol(header->ar_date)));
+            printf("%-18s", whats_the_time(atol(header->ar_date)));
             fwrite(header->ar_name, 1, 16, stdout);
 
             printf("\n");
