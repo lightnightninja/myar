@@ -326,7 +326,7 @@ void print_table(int verbose, int arch_fd){
         }
 
         if (verbose == 1){
-            printf("%-10s", _perms(header->ar_mode));
+            printf("%-9s", _perms(header->ar_mode));
             printf("%6ld/", atol(header->ar_uid));
             printf("%-6ld", atol(header->ar_gid));
             printf("%6lld ", atoll(header->ar_size));
