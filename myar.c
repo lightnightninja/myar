@@ -59,6 +59,10 @@ int main(int argc, const char *argv[]) {
     int     arch_fd;
     int     file_fd;
 
+    //Trying to set everyting to rw-rw-rw
+    mode_t perms = S_IXUSR | S_IXGRP | S_IXOTH;
+    umask(perms);
+
     /* ensuring correct input, and that archive recieves .a extention */
     if (argv[1][1] == 't') {
         v = _verbose(argv);
@@ -163,6 +167,11 @@ char *_create_header(int file_fd, char *file_name){
 /* -q quickly append named files to archive */
 int append(char *file_name, int arch_fd, int file_fd){
 
+    /*Attempt to change the perms of the file to rw-rw-rw- */
+
+    //mode_t perms = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
+    //fchmod(file_fd, perms);
+
     char *buffer = malloc(sizeof(struct ar_hdr));
     buffer = _create_header(file_fd, file_name);
     size_t bytes_read;
@@ -173,11 +182,11 @@ int append(char *file_name, int arch_fd, int file_fd){
     }
     /* This allows to differentiate the boundaries between files, making searching easy */
 
-    char newlines[]={10, 10, 10, 10};
+    char newline[]={10};
 
     /* Ensure we are starting on an even boundry */
     int evenboundry;
-    char blank[] = {0};
+    char blank[] = {10};
     evenboundry = lseek(arch_fd, 0, SEEK_END) % 2;
     if (evenboundry != 0) {
         if(write(arch_fd, blank, 1) == -1)
@@ -192,7 +201,6 @@ int append(char *file_name, int arch_fd, int file_fd){
             return -1;
         }
     }
-    write(arch_fd, newlines, 2);
     return 1;
 
 }
@@ -448,13 +456,10 @@ int is_ar(int fd, char *arch, char c){
 int _create_ar(char *file_name, int fd){
 
 
-    int flags = (O_RDWR | O_CREAT | O_EXCL);
+    int flags = (O_RDWR | O_CREAT);
 
-    //printf("The FD is: %i\n", fd);//debug
-    mode_t perms = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
-    fchmod(fd, perms);
 
-    if ((fd = open(file_name, flags, perms)) == -1)
+    if ((fd = open(file_name, flags, 0666)) == -1)
         return -1;
 
     write(fd, ARMAG, SARMAG);
