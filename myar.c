@@ -436,13 +436,13 @@ int delete(int argc, char **argv,  int arch_fd, int file_count){
                 new_offset = lseek(temp_fd, new_offset, SEEK_SET);
 
                 printf("temp_offset = %i\n", new_offset);
-                evenboundry = new_offset % 2;
+                //evenboundry = new_offset % 2;
 
-                if (evenboundry != 0) {
-                    if(write(temp_fd, newline, 1) == -1)
-                        return -1;
-                     new_offset++;
-                }
+               // if (evenboundry != 0) {
+                 //   if(write(temp_fd, newline, 1) == -1)
+                //        return -1;
+               //      new_offset++;
+                //}
 
 
                 /* Places the header in the file. */
