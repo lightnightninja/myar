@@ -13,6 +13,7 @@
 #ifndef AR_HDR_SIZE
 #define AR_HDR_SIZE 60
 #endif
+#define endl printf("\n")
 
 #include <sys/types.h>
 #include <unistd.h>
@@ -36,7 +37,7 @@ void    print_usage(); //prints out how to use program
 int     append(char *, int, int); // handles -q
 void    extract(); // handles -x
 void    print_table(int, int);
-void    delete(); // handles -d
+int     delete(int, char **, int, int); // handles -d
 int     append_all(char *, int); // handles -A
 int     is_ar(int, char *, char);
 //void w(); //EXTRA CREDIT
@@ -117,7 +118,8 @@ int main(int argc, const char *argv[]) {
             break;
 
         case 'd':
-            delete();
+            if(delete(argc, (char **)argv, arch_fd, file_count) == -1)
+                return -1;
             break;
 
         case 'A':
@@ -182,14 +184,15 @@ int append(char *file_name, int arch_fd, int file_fd){
     }
     /* This allows to differentiate the boundaries between files, making searching easy */
 
-    char newline[]={10};
+
 
     /* Ensure we are starting on an even boundry */
     int evenboundry;
-    char blank[] = {10};
+    char newline[] = {10};//newline char
+
     evenboundry = lseek(arch_fd, 0, SEEK_END) % 2;
     if (evenboundry != 0) {
-        if(write(arch_fd, blank, 1) == -1)
+        if(write(arch_fd, newline, 1) == -1)
             return -1;
     }
     /* Places the header in the file. */
@@ -230,7 +233,6 @@ int _verbose(const char **argv){
     return -1;
     
 }
-
 char *_perms(const char *p){
 
     /* code used from example at: http://codewiki.wikidot.com/c:system-calls:stat
@@ -344,10 +346,63 @@ void print_table(int verbose, int arch_fd){
 
 
 /* -d delete named files from the archive */
-void delete(){
+int delete(int argc, char **argv,  int arch_fd, int file_count){
 
-    printf("I recieved a d!\n");
+    //needs to take in names of files from argv, so pass argv argc
 
+    //create temp archive
+    int temp_fd;
+    if ((temp_fd = open("temp.a", O_RDWR)) == -1) {
+        if((temp_fd = _create_ar("temp.a", temp_fd)) == -1)
+            return -1;
+    }
+
+    struct ar_hdr *header = malloc(sizeof(struct ar_hdr));
+    off_t old_offset = 0;
+    off_t new_offset;
+    int len = 0;
+    char name[16];
+
+
+    if(write(temp_fd, ARMAG, SARMAG) == -1)
+        return -1;
+
+    old_offset = lseek(arch_fd, SARMAG, SEEK_SET);
+    new_offset = lseek(temp_fd, SARMAG, SEEK_SET);
+
+
+    char **files = malloc(file_count);
+    printf("Files to remove: ");
+    endl;
+
+    for (int i = 0; i < file_count; i++) {
+        files[i] = argv[i+3]; //
+        printf("%s\n", files[i]);
+    }
+
+    while (go_fetch(old_offset, arch_fd, header) != -1) {//while it's not the end of the file
+        printf("old offset = %lli\n", old_offset);
+        //find the headers, I need to check to see if it matches any of the files.
+        for (int i = 0; i < file_count; i++) {
+            len = sizeof(files[i])/sizeof(char);//accounting for newline
+
+            memcpy(name, header->ar_name, len);
+            if(strncmp(name, files[i], len) == 0)
+                printf("woo, I can code!\n");
+        //if they are the same, don't copy over
+        }
+        //if they are not the same, copy
+        old_offset = lseek(arch_fd, atoll(header->ar_size), SEEK_CUR);
+    }
+    free(header);
+    unlink("temp.a");
+    printf("unlinked\n");
+
+    //when the end of file is hit, unlink old archive
+    //rename current archive
+    //close file
+
+    return 1;
 }
 
 
@@ -362,7 +417,7 @@ int append_all(char *arch_name, int arch_fd){
      * http://pubs.opengroup.org/onlinepubs/7908799/xsh/readdir.html
      */
     while ((file = readdir(cur)) != NULL) {
-        if ((file->d_type == DT_REG) && strcmp(file->d_name, arch_name) != 0 && strcmp(file->d_name, ".DS_Store") != 0 && strcmp(file->d_name, "myar.c") != 0) { //checking that we aren't looking at our arch
+        if ((file->d_type == DT_REG) && strcmp(file->d_name, arch_name) != 0 && strcmp(file->d_name, "myar") != 0 && strcmp(file->d_name, "myar.c") != 0) { //checking that we aren't looking at our arch, doesn't add itself, or it's executable.
             if((file_fd = open(file->d_name, O_RDONLY)) != -1){
                 append(file->d_name, arch_fd, file_fd);
                 close(file_fd);
@@ -473,7 +528,6 @@ int _create_ar(char *file_name, int fd){
 /* Extract
  * * deal with atime and mtime
  * Delete
- * Fix Permissions of files
  * extra credit?
  * write up
  */
