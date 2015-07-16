@@ -35,7 +35,7 @@
 /* function declarations */
 void    print_usage(); //prints out how to use program
 int     append(char *, int, int); // handles -q
-void    extract(); // handles -x
+int    extract(int, char **, int, int); // handles -x
 void    print_table(int, int);
 int     delete(int, char **, int, int); // handles -d
 int     append_all(char *, int); // handles -A
@@ -110,7 +110,8 @@ int main(int argc, const char *argv[]) {
             break;
 
         case 'x':
-            extract();
+            if(extract(argc, (char **)argv, arch_fd, file_count) == -1)
+                return EXIT_FAILURE;
             break;
 
         case 't':
@@ -119,7 +120,7 @@ int main(int argc, const char *argv[]) {
 
         case 'd':
             if(delete(argc, (char **)argv, arch_fd, file_count) == -1)
-                return -1;
+                return EXIT_FAILURE;
             break;
 
         case 'A':
@@ -210,11 +211,7 @@ int append(char *file_name, int arch_fd, int file_fd){
 
 
 /* -x extract named files */
-void extract(){
 
-    printf("I recieved a x!\n");
-
-}
 
 
 /* returns whether or not the table is going to be printed in verbose mode */
@@ -380,7 +377,7 @@ int delete(int argc, char **argv,  int arch_fd, int file_count){
     char **files = malloc(file_count);
 
     for (int i = 0; i < file_count; i++) {
-        files[i] = argv[i+3]; 
+        files[i] = argv[i+3];
     }
 
     while (go_fetch(old_offset, arch_fd, header) != -1) {//while it's not the end of the file
@@ -503,6 +500,108 @@ void print_usage(){
            //"        -w for a given timeout, add all modified files to the archive.\n"
            //"            myar -w archive [file ...]\n"
            );
+    
+}
+
+/* basically doing the reverse of delte */
+int extract(int argc, char **argv,  int arch_fd, int file_count){
+
+    struct ar_hdr *header = malloc(sizeof(struct ar_hdr));
+    off_t old_offset = 0;
+    off_t offset;
+    int len = 0;
+    int something = 0;
+    char name[16];
+    char buffer[BSIZE];
+
+
+    int flags = (O_RDWR | O_CREAT);
+
+    size_t bytes_read = 0;
+    size_t to_read = BSIZE;
+    int count;
+    int i;
+    int thing = file_count;
+
+    old_offset = lseek(arch_fd, SARMAG, SEEK_SET);
+
+    int temp_fd = 0;
+
+    char **files = malloc(file_count);
+
+    for (int i = 0; i < file_count; i++) {
+        files[i] = argv[i+3];
+    }
+
+    while (go_fetch(old_offset, arch_fd, header) != -1) {//while it's not the end of the file
+
+        if (strncmp(header->ar_fmag, ARFMAG, 2) != 0) {
+            break;
+        }
+        something = 0;
+
+        old_offset = lseek(arch_fd, 0, SEEK_CUR);
+        //find the headers, I need to check to see if it matches any of the files.
+        if (thing != 0) {
+            for (i = 0; i < file_count ; i++) {
+                if (files[i] != NULL ) {
+                    len = sizeof(files[i])/sizeof(char);//accounting for newline
+                    memcpy(name, header->ar_name, len);//copying so we can check just the name
+                    printf("hader = %s\n", name);
+                    //just want to compare len bytes
+                        old_offset += 60;
+                        offset = lseek(arch_fd, old_offset, SEEK_SET); //skip that shit
+                        printf("hader = %s\n", header->ar_name);
+
+                    printf("offset %i\n", offset);
+                    if(strncmp(name, files[i], len) == 0){
+                        if((temp_fd = open("temp.txt", flags) != -1))
+                                something = 1;
+
+                        printf("Bytes written %i\n", temp_fd);
+                        if (something == 1) {
+
+                            printf("adding file: %s\n", files[i]);
+                            if(lseek(temp_fd, 0, SEEK_SET))
+
+                                printf("adding file: %s\n", files[i]);
+                            /* Transfers data from file to archive */
+                            count = 0;
+
+                            printf("grr: %i\n", temp_fd);
+                            while (count < atoll(header->ar_size)) {
+                                if (atoll(header->ar_size) - count <= bytes_read) {
+                                    to_read = atoll(header->ar_size) - count;
+                                }
+                                bytes_read = read(arch_fd, buffer, to_read);
+                                if (write(temp_fd, buffer, bytes_read) != bytes_read) { //checking to make sure we don't have a write error
+                                    return -1;
+                                }
+                                count += bytes_read;
+
+                            }
+                            printf("1 %i\n", count);
+                            old_offset = lseek(arch_fd, old_offset+count, SEEK_SET);
+                        }
+
+                        printf("offset %i\n", offset);
+                        printf("end: %s\n", files[i]);
+                        close(temp_fd);
+                        //rename("temp.txt", files[i]);
+                        files[i] = NULL;
+                        thing--;
+                    }
+                }
+            }
+        }
+        else
+            break;
+        /* Ensure we are starting on an even boundry */
+
+    }
+    
+    free(header);
+    return 1;
     
 }
 
