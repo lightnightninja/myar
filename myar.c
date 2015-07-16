@@ -466,7 +466,7 @@ int delete(int argc, char **argv,  int arch_fd, int file_count){
 
                 }
 
-                new_offset += count + AR_HDR_SIZE;
+                new_offset += count;
                 lseek(arch_fd, old_offset, SEEK_SET);
                 printf("bytes read: %i\n", count);
                 old_offset = lseek(arch_fd, 0, SEEK_CUR);
