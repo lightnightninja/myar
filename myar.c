@@ -350,7 +350,6 @@ int delete(int argc, char **argv,  int arch_fd, int file_count){
 
     //needs to take in names of files from argv, so pass argv argc
     unlink("temp.a");
-
     //create temp archive
     int temp_fd;
     if ((temp_fd = open("temp.a", O_RDWR)) == -1) {
@@ -389,97 +388,101 @@ int delete(int argc, char **argv,  int arch_fd, int file_count){
 
     while (go_fetch(old_offset, arch_fd, header) != -1) {//while it's not the end of the file
 
-
-        printf("found a header\n");
-        something = 0;
-        new_offset = lseek(temp_fd, 0, SEEK_CUR);
-
-        printf("temp_offset1 = %i\n", new_offset);
-
-        old_offset = lseek(arch_fd, 0, SEEK_CUR);
-        printf("offset = %lli\n", old_offset);
-        //find the headers, I need to check to see if it matches any of the files.
-        if (thing != 0) {
-
-            for (int i = 0; i < file_count ; i++) {
-                if (files[i] != NULL ) {
-                    len = sizeof(files[i])/sizeof(char);//accounting for newline
-                    memcpy(name, header->ar_name, len);//copying so we can check just the name
-
-                    if(strncmp(name, files[i], len) == 0){//just want to compare len bytes
-                        old_offset += 60;
-                        offset = lseek(arch_fd, old_offset, SEEK_SET); //skip that shit
-
-                        printf("old offset = %lli\n", offset);
-
-                        files[i] = NULL;
-                        thing--;
-                        printf("woo, I can code!\n");
-                        something = 1;
-
-                    }
-
-                }
-            //if they are the same, don't copy over
-            }
-
+        if (strncmp(header->ar_fmag, ARFMAG, 2) != 0) {
+            break;
         }
-        /* Ensure we are starting on an even boundry */
-        if (something != 1) {
+
+            printf("found a header: %s\n", header->ar_name);
+            printf("temp_fd = %i\n", temp_fd);
+            something = 0;
+            printf("temp_fd = %i\n", new_offset);
             new_offset = lseek(temp_fd, new_offset, SEEK_SET);
 
-            printf("temp_offset = %i\n", new_offset);
-            evenboundry = new_offset % 2;
+            printf("temp_offset1 = %i\n", new_offset);
 
-            if (evenboundry != 0) {
-                if(write(temp_fd, newline, 1) == -1)
-                    return -1;
-                 new_offset++;
-            }
-
-
-            /* Places the header in the file. */
-            if((new_offset += write(temp_fd, (char *)header, sizeof(struct ar_hdr))) == -1)
-                return -1;
-            /* Transfers data from file to archive */
             old_offset = lseek(arch_fd, 0, SEEK_CUR);
+            printf("offset = %lli\n", old_offset);
+            //find the headers, I need to check to see if it matches any of the files.
+            if (thing != 0) {
 
-            printf("old offset = %lli\n", old_offset);
-            count = 0;
-            while (count < atoll(header->ar_size)) {
-                if (atoll(header->ar_size) - count <= bytes_read) {
-                    to_read = atoll(header->ar_size) - count;
+                for (int i = 0; i < file_count ; i++) {
+                    if (files[i] != NULL ) {
+                        len = sizeof(files[i])/sizeof(char);//accounting for newline
+                        memcpy(name, header->ar_name, len);//copying so we can check just the name
+
+                        if(strncmp(name, files[i], len) == 0){//just want to compare len bytes
+                            old_offset += 60;
+                            offset = lseek(arch_fd, old_offset, SEEK_SET); //skip that shit
+
+                            printf("old offset = %lli\n", offset);
+
+                            files[i] = NULL;
+                            thing--;
+                            endl;
+                            printf("woo, I can code!\n");
+                            endl;
+                            endl;
+                            something = 1;
+
+                        }
+
+                    }
+                //if they are the same, don't copy over
                 }
-                bytes_read = read(arch_fd, buffer, to_read);
-                if (write(temp_fd, buffer, bytes_read) != bytes_read) { //checking to make sure we don't have a write error
-                    return -1;
-                }
-
-                count += bytes_read;
-
 
             }
-            new_offset += count;
-            lseek(arch_fd, old_offset, SEEK_SET);
-            printf("bytes read: %i\n", count);
-            old_offset = lseek(arch_fd, 0, SEEK_CUR);
+            /* Ensure we are starting on an even boundry */
+            if (something != 1) {
+                new_offset = lseek(temp_fd, new_offset, SEEK_SET);
 
-            endl;
+                printf("temp_offset = %i\n", new_offset);
+                evenboundry = new_offset % 2;
+
+                if (evenboundry != 0) {
+                    if(write(temp_fd, newline, 1) == -1)
+                        return -1;
+                     new_offset++;
+                }
+
+
+                /* Places the header in the file. */
+                if((new_offset += write(temp_fd, (char *)header, sizeof(struct ar_hdr))) == -1)
+                    return -1;
+                /* Transfers data from file to archive */
+                old_offset = lseek(arch_fd, 0, SEEK_CUR);
+
+                printf("old offset = %lli\n", old_offset);
+                count = 0;
+                while (count < atoll(header->ar_size)) {
+                    if (atoll(header->ar_size) - count <= bytes_read) {
+                        to_read = atoll(header->ar_size) - count;
+                    }
+                    bytes_read = read(arch_fd, buffer, to_read);
+                    if (write(temp_fd, buffer, bytes_read) != bytes_read) { //checking to make sure we don't have a write error
+                        return -1;
+                    }
+
+                    count += bytes_read;
+
+                }
+
+                new_offset += count + AR_HDR_SIZE;
+                lseek(arch_fd, old_offset, SEEK_SET);
+                printf("bytes read: %i\n", count);
+                old_offset = lseek(arch_fd, 0, SEEK_CUR);
+            }
+            //if they are not the same, copy
             endl;
         }
-        //if they are not the same, copy
-        endl;
-    }
+        free(header);
+        close(temp_fd);
+        //rename("temp.a", argv[2]);
+        //unlink("temp.a");
+        //printf("unlinked\n");
 
-    printf("t = %i\n",temp_fd);
-    free(header);
-    close(temp_fd);
-    //unlink("temp.a");
-    //printf("unlinked\n");
-
-    //when the end of file is hit, unlink old archive
-    //rename current archive
-    //close file
+        //when the end of file is hit, unlink old archive
+        //rename current archive
+        //close file
 
     return 1;
 }
