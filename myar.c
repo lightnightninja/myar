@@ -427,7 +427,7 @@ int delete(int argc, char **argv,  int arch_fd, int file_count){
             old_offset = lseek(arch_fd, 0, SEEK_CUR);
             count = 0;
 
-            while (count < atoll(header->ar_size)) {
+            while (count <= atoll(header->ar_size)) {
                 if (atoll(header->ar_size) - count <= bytes_read) {
                     to_read = atoll(header->ar_size) - count;
                 }
@@ -558,7 +558,7 @@ int extract(int argc, char **argv,  int arch_fd, int file_count){
                         if((temp_fd = open("temp.txt", flags) != -1))
                                 something = 1;
 
-                        printf("Bytes written %i\n", temp_fd);
+                        printf("temp_fd %i\n", temp_fd);
                         if (something == 1) {
 
                             printf("adding file: %s\n", files[i]);
@@ -568,8 +568,9 @@ int extract(int argc, char **argv,  int arch_fd, int file_count){
                             /* Transfers data from file to archive */
                             count = 0;
 
-                            printf("grr: %i\n", temp_fd);
-                            while (count < atoll(header->ar_size)) {
+                            printf("arch bytes: %i\n", atoll(header->ar_size));
+                            while (count <= atoll(header->ar_size)) {
+                                printf("count = %i\n", count);
                                 if (atoll(header->ar_size) - count <= bytes_read) {
                                     to_read = atoll(header->ar_size) - count;
                                 }
